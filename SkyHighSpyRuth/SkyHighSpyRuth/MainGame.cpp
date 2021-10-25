@@ -8,9 +8,6 @@ constexpr int DISPLAY_WIDTH = 1280; // convert to constexpr if they don't change
 constexpr int DISPLAY_HEIGHT = 720;
 constexpr int DISPLAY_SCALE = 1;
 constexpr int origin_offset_y = 15;
-int startingLevel = 2; // put in GameState
-int gemNumber = startingLevel / 2; // put in GameState
-int gemsSpawned = 0; // put in GameState
 constexpr float randomMin = 0;
 constexpr float randomMax = 6.3f;
 
@@ -40,7 +37,9 @@ struct GameState
 {
 	Agent8States agentStates = STATE_START;
 	int score = 0;
-	// more things in here
+	int startingLevel = 2;
+	int gemNumber = startingLevel / 2;
+	int gemsSpawned = 0;
 };
 
 GameState gameState;
@@ -80,8 +79,8 @@ void MainGameEntry(PLAY_IGNORE_COMMAND_LINE)
 	Play::MoveSpriteOrigin("asteroid_2", 0, 1 - origin_offset_y);
 
 	//Platforms and hazards
-	SpawnRocks(startingLevel);
-	SpawnMeteors(startingLevel);
+	SpawnRocks(gameState.startingLevel);
+	SpawnMeteors(gameState.startingLevel);
 }
 
 // Called by PlayBuffer every frame (60 times a second!)
@@ -97,12 +96,12 @@ bool MainGameUpdate( float elapsedTime )
 	UpdateParticles();
 
 	//Next level
-	if (gameState.score == gemNumber)
+	if (gameState.score == gameState.gemNumber)
 	{
-		startingLevel += 1;
-		gemNumber = startingLevel / 2;
+		gameState.startingLevel += 1;
+		gameState.gemNumber = gameState.startingLevel / 2;
 		Play::PlayAudio("reward");
-		Restart(startingLevel);
+		Restart(gameState.startingLevel);
 	}
 	Play::PresentDrawingBuffer();
 	return Play::KeyDown( VK_ESCAPE );
@@ -359,7 +358,7 @@ void StateDead()
 	//Restart current level
 	if (Play::KeyPressed(VK_SPACE))
 	{
-		Restart(startingLevel);
+		Restart(gameState.startingLevel);
 		Play::SetSprite(obj_agent, "agent8_left_7", 0);
 	}
 }
@@ -372,8 +371,8 @@ void StateStart()
 	obj_agent.rotSpeed = 0;
 
 	//Instructions
-	Play::DrawFontText("151px", "Level " + std::to_string(startingLevel - 1), { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 }, Play::CENTRE);
-	Play::DrawFontText("64px", "Collect " + std::to_string(gemNumber) + " gem(s)", { DISPLAY_WIDTH / 2 - 17, DISPLAY_HEIGHT / 2 + 100 }, Play::CENTRE);
+	Play::DrawFontText("151px", "Level " + std::to_string(gameState.startingLevel - 1), { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 }, Play::CENTRE);
+	Play::DrawFontText("64px", "Collect " + std::to_string(gameState.gemNumber) + " gem(s)", { DISPLAY_WIDTH / 2 - 17, DISPLAY_HEIGHT / 2 + 100 }, Play::CENTRE);
 	Play::DrawFontText("64px", "Left and right keys to move, spacebar to jump", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT - 50 }, Play::CENTRE);
 	
 	//Start Game
@@ -438,7 +437,7 @@ void SpawnGems(int id_rock)
 {
 	GameObject& obj_rock = Play::GetGameObject(id_rock);
 	//Only if total number of gems for level isn't yet reached
-	if (gemsSpawned < gemNumber)
+	if (gameState.gemsSpawned < gameState.gemNumber)
 	{
 		//Only for odd number asteroids
 		if (id_rock % 2)
@@ -464,7 +463,7 @@ void SpawnGems(int id_rock)
 				obj_gem.pos.x = 20;
 			}
 			obj_gem.animSpeed = 0.5;
-			gemsSpawned++;
+			gameState.gemsSpawned++;
 		}
 	}	
 }
@@ -590,7 +589,7 @@ void Restart(int level)
 
 	//Reset variables
 	gameState.score = 0;
-	gemsSpawned = 0;
+	gameState.gemsSpawned = 0;
 	gameState.agentStates = STATE_START;
 	Play::SetSprite(obj_agent, "agent8_left", 0);
 }
