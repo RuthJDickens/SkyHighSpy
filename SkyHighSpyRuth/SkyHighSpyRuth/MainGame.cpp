@@ -8,8 +8,8 @@ constexpr int DISPLAY_WIDTH = 1280; // convert to constexpr if they don't change
 constexpr int DISPLAY_HEIGHT = 720;
 constexpr int DISPLAY_SCALE = 1;
 constexpr int origin_offset_y = 15;
-constexpr float randomMin = 0;
-constexpr float randomMax = 6.3f;
+//constexpr float randomMin = 0;
+//constexpr float randomMax = 6.3f;
 
 enum Types
 {
@@ -122,11 +122,7 @@ void SpawnRocks(int level)
 		//std::uniform_real_distribution<float> randomNumber(randomMin, randomMax);
 		//float rotation = randomNumber(eng);
 		
-		//float rotation = ((rand()/ RAND_MAX) * (PLAY_PI * 2));	// 0-2PI radians
-
-		float random = rand();
-		float rotNew = random/ RAND_MAX;
-		float rotation = rotNew * (PLAY_PI * 2);
+		float rotation = (((float)rand()/ RAND_MAX) * (PLAY_PI * 2));	// 0-2PI radians
 		GameObject& obj_rock = Play::GetGameObject(id_rock);
 		obj_rock.rotation = rotation;
 		obj_rock.animSpeed = 0.05;
@@ -166,9 +162,7 @@ void SpawnMeteors(int level)
 		std::default_random_engine eng(seed());
 		std::uniform_real_distribution<float> randomNumber(randomMin, randomMax);*/
 
-		float random = rand();
-		float rotNew = random / RAND_MAX;
-		float rotation = rotNew * (PLAY_PI * 2);
+		float rotation = (((float)rand() / RAND_MAX) * (PLAY_PI * 2));	// 0-2PI radians
 		obj_meteor.rotation = rotation;
 		obj_meteor.animSpeed = 0.05;
 	}
@@ -277,7 +271,7 @@ void StateFlying()
 	}
 
 	//Hitting a deadly meteor
-	/*for (int id : vMeteors)
+	for (int id : vMeteors)
 	{
 		GameObject& obj_meteor = Play::GetGameObject(id);
 		if (Play::IsColliding(obj_agent, obj_meteor))
@@ -285,7 +279,7 @@ void StateFlying()
 			Play::PlayAudio("combust");
 			gameState.agentStates = STATE_DEAD;
 		}
-	}*/
+	}
 
 	//Collecting gems
 	for (int id : vGems)
