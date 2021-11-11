@@ -1,15 +1,11 @@
 #define PLAY_IMPLEMENTATION
 #define PLAY_USING_GAMEOBJECT_MANAGER
 #include "Play.h"
-#include <vector>
-#include <random>
 
-constexpr int DISPLAY_WIDTH = 1280; // convert to constexpr if they don't change and use upper case
+constexpr int DISPLAY_WIDTH = 1280;
 constexpr int DISPLAY_HEIGHT = 720;
 constexpr int DISPLAY_SCALE = 1;
 constexpr int origin_offset_y = 15;
-//constexpr float randomMin = 0;
-//constexpr float randomMax = 6.3f;
 
 enum Types
 {
@@ -72,13 +68,16 @@ void MainGameEntry(PLAY_IGNORE_COMMAND_LINE)
 	Play::StartAudioLoop("music");
 
 	//Spawn Player and set origin for crawling sprites
+	//in order to crawl around asteroid surface the point of origin which they rotate around needs to be shifted on the y axis
 	int id_agent = Play::CreateGameObject(TYPE_AGENT8, { 0,0 }, 50, "agent8_left_7");
 	int agent_height = Play::GetSpriteHeight(Play::GetGameObject(id_agent).spriteId);
 	Play::MoveSpriteOrigin("agent8_left_7", 0, agent_height / 2 + origin_offset_y);
 	Play::MoveSpriteOrigin("agent8_right_7", 0, agent_height / 2 + origin_offset_y);
+
+	//The asteroid's sprite has a small tail so origin also needs to move along y so it is in the centre of the asteroid itself
 	Play::MoveSpriteOrigin("asteroid_2", 0, 1 - origin_offset_y);
 
-	//Platforms and hazards
+	//Platforms and hazards - no. of both depends on gamestate level so takes it as an argument
 	SpawnRocks(gameState.startingLevel);
 	SpawnMeteors(gameState.startingLevel);
 }
@@ -87,7 +86,6 @@ void MainGameEntry(PLAY_IGNORE_COMMAND_LINE)
 bool MainGameUpdate( float elapsedTime )
 {
 	Play::DrawBackground();
-	//Play::ClearDrawingBuffer(Play::cBlack);
 	UpdateRock();
 	UpdateAgent();
 	UpdatePieces();
@@ -116,12 +114,8 @@ void SpawnRocks(int level)
 		int pos_x = Play::RandomRoll(DISPLAY_WIDTH);
 		int pos_y = Play::RandomRoll(DISPLAY_HEIGHT);
 		int id_rock = Play::CreateGameObject(TYPE_ASTEROID, { pos_x, pos_y }, 60, "asteroid_2");
-		
-		//std::random_device seed;
-		//std::default_random_engine eng(seed());
-		//std::uniform_real_distribution<float> randomNumber(randomMin, randomMax);
-		//float rotation = randomNumber(eng);
-		
+
+		//Produces random float between 0-2 (radians), must cast rand() to float otherwise assumes int/int = int and rounds down to 0
 		float rotation = (((float)rand()/ RAND_MAX) * (PLAY_PI * 2));	// 0-2PI radians
 		GameObject& obj_rock = Play::GetGameObject(id_rock);
 		obj_rock.rotation = rotation;
@@ -129,7 +123,7 @@ void SpawnRocks(int level)
 	}
 	std::vector<int> vRocks = Play::CollectGameObjectIDsByType(TYPE_ASTEROID);
 
-	//Randomly choose one for Agent8 to start on
+	//Randomly choose one for Agent8 to start on by randomly choosing index of vector and changing type of object there
 	int id_attached = Play::RandomRollRange(0, vRocks.size() -1);
 	GameObject& obj_attached = Play::GetGameObject(vRocks.at(id_attached));
 	obj_attached.type = TYPE_ATTACHED;
@@ -145,6 +139,13 @@ void SpawnMeteors(int level)
 		int pos_y = Play::RandomRoll(DISPLAY_HEIGHT);
 		int id_meteor = Play::CreateGameObject(TYPE_METEOR, { pos_x, pos_y }, 60, "meteor");
 		GameObject& obj_meteor = Play::GetGameObject(id_meteor);
+		//Random rotation
+		float rotation = (((float)rand() / RAND_MAX) * (PLAY_PI * 2));	// 0-2PI radians
+		obj_meteor.rotation = rotation;
+		obj_meteor.animSpeed = 0.05;
+
+		//When spawned, check it isn't overlapping with any of the other asteroids
+		//If deadly asteroid is overlapping with an asteroid can create impossible situation for player
 		std::vector<int> vRocks = Play::CollectGameObjectIDsByType(TYPE_ASTEROID);
 		GameObject& obj_attached = Play::GetGameObjectByType(TYPE_ATTACHED);
 		for (int id : vRocks)
@@ -152,25 +153,17 @@ void SpawnMeteors(int level)
 			GameObject& obj_rock = Play::GetGameObject(id);
 			if (Play::IsColliding(obj_meteor, obj_rock) || Play::IsColliding(obj_meteor, obj_attached))
 			{
-				obj_meteor.pos.x = obj_meteor.pos.x + 20 * sin(obj_meteor.rotation);
-				obj_meteor.pos.y = obj_meteor.pos.y + 20 * -cos(obj_meteor.rotation);
+				//If overlapping then shifts position along the path determined by its rotation
+				obj_meteor.pos.x += 20 * sin(obj_meteor.rotation);
+				obj_meteor.pos.y += 20 * -cos(obj_meteor.rotation);
 			}
 		}
-
-		//Random Float rotation
-		/*std::random_device seed;
-		std::default_random_engine eng(seed());
-		std::uniform_real_distribution<float> randomNumber(randomMin, randomMax);*/
-
-		float rotation = (((float)rand() / RAND_MAX) * (PLAY_PI * 2));	// 0-2PI radians
-		obj_meteor.rotation = rotation;
-		obj_meteor.animSpeed = 0.05;
 	}
 }
 
 void UpdateRock()
 {
-	//For both asteroids and meteors
+	//Both asteroids and meteors have same update method so consolidated code into one function and used 2D vector
 	std::vector<std::vector<int>> vRocks =
 	{
 		{ Play::CollectGameObjectIDsByType(TYPE_ASTEROID) },
@@ -200,6 +193,7 @@ void UpdateAgent()
 	GameObject& obj_agent = Play::GetGameObjectByType(TYPE_AGENT8);
 	GameObject& obj_attached = Play::GetGameObjectByType(TYPE_ATTACHED);
 
+	//State machine for agent; each state has it's own method to reduce clutter in UpdateAgent()
 	switch (gameState.agentStates)
 	{
 		case STATE_FLYING:
@@ -222,15 +216,16 @@ void UpdateAgent()
 
 			break;
 	}
-
+	//Implements any changes from state by updating game object and drawing to buffer 
 	Play::UpdateGameObject(obj_agent);
 	Play::DrawObjectRotated(obj_agent);
+	//score UI updated here since it's in StateFlying that score may change
 	Play::DrawFontText("105px", "Gems = " + std::to_string(gameState.score), { 50,50 }, Play::LEFT);
 }
 
 void StateFlying()
 {
-	//Variables
+	//Variables - references to agent and any objects it may collide with
 	GameObject& obj_agent = Play::GetGameObjectByType(TYPE_AGENT8);
 	std::vector<int> vRocks = Play::CollectGameObjectIDsByType(TYPE_ASTEROID);
 	std::vector<int> vMeteors = Play::CollectGameObjectIDsByType(TYPE_METEOR);
@@ -263,9 +258,11 @@ void StateFlying()
 		GameObject& obj_rock = Play::GetGameObject(id);
 		if (Play::IsColliding(obj_agent, obj_rock))
 		{
+			//If it collides with any asteroid in vector, that asteroid becomes TYPE_ATTACHED so it can be referenced, and state changes
 			gameState.agentStates = STATE_ATTACHED;
 			Play::SetSprite(obj_agent, "agent8_left_7", 0);
 			obj_rock.type = TYPE_ATTACHED;
+			//Agent8 is pointed towards old position so it lands on the side of the asteroid it collided with
 			Play::PointGameObject(obj_agent, 0, obj_agent.oldPos.x, obj_agent.oldPos.y);
 		}
 	}
@@ -289,9 +286,11 @@ void StateFlying()
 		{
 			gameState.score++;
 			Play::PlayAudio("collect");
+			//Ring particle effect spawned
 			int id_ring = Play::CreateGameObject(TYPE_RING, obj_gem.pos, 0, "blue_ring");
 			GameObject& obj_ring = Play::GetGameObject(id_ring);
 			obj_ring.scale = 0.25;
+			//Destroys gem - must happen last
 			Play::DestroyGameObject(id);
 		}
 	}
@@ -299,14 +298,15 @@ void StateFlying()
 
 void StateAttached()
 {
-	//Variables
+	//Variables - must have object reference AND ID as different functions take different argument types
 	GameObject& obj_agent = Play::GetGameObjectByType(TYPE_AGENT8);
 	GameObject& obj_attached = Play::GetGameObjectByType(TYPE_ATTACHED);
 	int id_attached = obj_attached.GetId();
 
+	//Separate Attached function as it is called in StateStart() as well
 	AgentAttached();
 
-	//Left and right movement
+	//Left and right movement - sprite changes specific to StateAttached
 	if (Play::KeyDown(VK_RIGHT))
 	{
 		obj_agent.rotSpeed = 0.05;
@@ -326,11 +326,14 @@ void StateAttached()
 	//Launch from asteroid
 	if (Play::KeyPressed(VK_SPACE))
 	{
+		//Change state - this is where the sprite changes
 		gameState.agentStates = STATE_FLYING;
 		Play::PlayAudio("explode");
+		//Movement set depending on inital rotation
 		obj_agent.pos.x = obj_agent.pos.x + 20 * sin(obj_agent.rotation);
 		obj_agent.pos.y = obj_agent.pos.y + 20 * -cos(obj_agent.rotation);
 		obj_agent.animSpeed = 0.1;
+		//Spawn functions called using copy of attached obj/id, then asteroid destroyed
 		SpawnPieces(obj_attached);
 		SpawnGems(id_attached);
 		Play::DestroyGameObject(id_attached);
@@ -339,7 +342,7 @@ void StateAttached()
 
 void StateDead()
 {
-	//Agent
+	//Agent - update agent8 to set sprite, stop rotating and increase speed, also handles wrapping around screen
 	GameObject& obj_agent = Play::GetGameObjectByType(TYPE_AGENT8);
 	Play::SetSprite(obj_agent, "agent8_dead", 1);
 	obj_agent.rotSpeed = 0;
@@ -349,27 +352,28 @@ void StateDead()
 		WrapMovement(obj_agent);
 	}
 
-	//Restart current level
+	//Restart current level when player presses space
 	if (Play::KeyPressed(VK_SPACE))
 	{
 		Restart(gameState.startingLevel);
-		Play::SetSprite(obj_agent, "agent8_left_7", 0);
 	}
 }
 
 void StateStart()
 {
-	//Attach to asteroid and reset rotation
+	//Attach to asteroid
 	AgentAttached();
 	GameObject& obj_agent = Play::GetGameObjectByType(TYPE_AGENT8);
+	//StateStart might be entered from Flying so rotSpeed reset
 	obj_agent.rotSpeed = 0;
+	Play::SetSprite(obj_agent, "agent8_left_7", 0);
 
 	//Instructions
 	Play::DrawFontText("151px", "Level " + std::to_string(gameState.startingLevel - 1), { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 }, Play::CENTRE);
 	Play::DrawFontText("64px", "Collect " + std::to_string(gameState.gemNumber) + " gem(s)", { DISPLAY_WIDTH / 2 - 17, DISPLAY_HEIGHT / 2 + 100 }, Play::CENTRE);
 	Play::DrawFontText("64px", "Left and right keys to move, spacebar to jump", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT - 50 }, Play::CENTRE);
 	
-	//Start Game
+	//Start Game when spacebar pressed
 	if (Play::KeyPressed(VK_SPACE))
 	{
 		gameState.agentStates = STATE_ATTACHED;
@@ -383,12 +387,12 @@ void AgentAttached()
 	GameObject& obj_attached = Play::GetGameObjectByType(TYPE_ATTACHED);
 	int id_attached = obj_attached.GetId();
 
-	//Attach to asteroid
+	//Attach to asteroid by setting position and velocity
 	obj_agent.pos = obj_attached.pos;
 	Play::SetGameObjectDirection(obj_attached, 4, obj_attached.rotation);
 	obj_agent.velocity = obj_attached.velocity;
 
-	//Update attached asteroid
+	//Update attached asteroid here because it will no longer be included in UpdateRocks()
 	Play::UpdateGameObject(obj_attached);
 	Play::DrawObjectRotated(obj_attached);
 	if (Play::IsLeavingDisplayArea(obj_attached))
@@ -403,17 +407,21 @@ void SpawnPieces(GameObject& object)
 	//Three pieces in three opposite directions
 	for (int i = 1; i <= 3; i++)
 	{
+		//Spawn at asteroid's position
 		int id_piece = Play::CreateGameObject(TYPE_PIECES, object.pos, 0, "asteroid_pieces");
 		GameObject& obj_piece = Play::GetGameObject(id_piece);
+		//Set movement based on rad angle
 		Play::SetGameObjectDirection(obj_piece, 10, rad);
+		//Spritesheet contains three frames so each piece can have a different appearance by changing frame
 		obj_piece.frame = i;
+		//Increase rad so next piece will have different rotation; 0.25f, 0.75f, 1.25f
 		rad += 0.5f;
 	}
 }
 
 void UpdatePieces()
 {
-	//Movement of pieces
+	//Update movement of pieces until they move out of visible display area, when they are destroyed
 	std::vector<int> vPieces = Play::CollectGameObjectIDsByType(TYPE_PIECES);
 	for (int id : vPieces)
 	{
@@ -430,16 +438,18 @@ void UpdatePieces()
 void SpawnGems(int id_rock)
 {
 	GameObject& obj_rock = Play::GetGameObject(id_rock);
-	//Only if total number of gems for level isn't yet reached
+	//Only spawn new gem if total number of gems for level isn't yet reached
 	if (gameState.gemsSpawned < gameState.gemNumber)
 	{
-		//Only for odd number asteroids
+		//Only spawn gem for odd number asteroids
+		//Adds randomness to gem spawns without risk of not enough gems spawning in level
 		if (id_rock % 2)
 		{
+			//When first spawned given TYPE_WAITING so player doesn't immediately collide with and collect gem
 			int id_gem = Play::CreateGameObject(TYPE_WAITING, obj_rock.pos, 20, "gem");
 			GameObject& obj_gem = Play::GetGameObject(id_gem);
 
-			//Check in display area
+			//Check in display area - if spawned out of sight, moved into display area
 			if (obj_gem.pos.y >= DISPLAY_HEIGHT)
 			{
 				obj_gem.pos.y = DISPLAY_HEIGHT - 20;
@@ -456,6 +466,7 @@ void SpawnGems(int id_rock)
 			{
 				obj_gem.pos.x = 20;
 			}
+			//Spawned gems need an animation speed to act as timer until allowing player collision
 			obj_gem.animSpeed = 0.5;
 			gameState.gemsSpawned++;
 		}
@@ -471,10 +482,11 @@ void UpdateGems()
 		GameObject& obj_waiting = Play::GetGameObject(id);
 		Play::UpdateGameObject(obj_waiting);
 		int waitTime = 10;
-		//Delay before allowing agent collision
+		//Delay before allowing agent collision - use frame as timer as this reliably increases every other frame (animSpeed = 0.5)
 		if (obj_waiting.frame == 10)
 		{
 			obj_waiting.type = TYPE_GEM;
+			//No longer needs animation speed - animation relies on rotation instead
 			obj_waiting.animSpeed = 0;
 			obj_waiting.rotSpeed = 0.05;
 		}
